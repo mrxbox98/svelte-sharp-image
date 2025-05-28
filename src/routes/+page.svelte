@@ -27,9 +27,7 @@
 import type { RequestHandler } from "@sveltejs/kit";
 
 export const GET: RequestHandler = async ({ url }) => {
-    return await optimizeImage(url, {
-        safeEndpoints: ["i.mrxbox98.me"],
-    });
+    return await optimizeImage(url);
 };
 `}
 </blockquote>
@@ -46,7 +44,8 @@ export const GET: RequestHandler = async ({ url }) => {
 <p>Then use the <code>Image</code> component from the library.</p>
 <blockquote style="white-space: pre-line">
     {`<Image src="https://i.mrxbox98.me/file/2024/08/chrome_Sb3dUdhQfy.png"  style="width: 200px" />
-<Image src="/favicon.png" />`}
+<Image src="/favicon.png" />
+<Image src="https://dev.w3.org/SVG/tools/svgweb/samples/svg-files/AJ_Digital_Camera.svg" />`}
 </blockquote>
 <p>Yields the following result:</p>
 <Image
@@ -56,6 +55,7 @@ export const GET: RequestHandler = async ({ url }) => {
     position="left"
 />
 <Image src="/favicon.png" />
+<Image src="https://dev.w3.org/SVG/tools/svgweb/samples/svg-files/AJ_Digital_Camera.svg" />
 <p>
     You can view the source of the images to check the format and compression.
 </p>

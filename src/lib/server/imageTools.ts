@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { existsSync } from "fs";
 import path from "path";
 import sharp, { type AvailableFormatInfo, type FormatEnum } from "sharp";
+import { optimize } from "svgo";
 
 /**
  * Generates a hash for caching purposes
@@ -116,65 +117,84 @@ export async function optimizeImage(
         }
     }
 
+    const isSVG = urlsrc.endsWith(".svg") || urlsrc.endsWith(".svgz");
+
     const image = isUrl ? await fetchImage(urlsrc) : urlsrc;
 
     if (isUrl && (image as any).status !== 200) {
         return new Response("Image not found", { status: 400 });
     }
 
-    const format = url.searchParams.has("format")
+    let buffer: Buffer | undefined = undefined;
+
+    let format = url.searchParams.has("format")
         ? url.searchParams.get("format")
         : "webp";
 
-    // Specific avif adjustments that we need to make
-    const toFormat: keyof FormatEnum | AvailableFormatInfo =
-        format === "avif" ? "heif" : (format as any);
-    const compression = format === "avif" ? "av1" : undefined;
+    if (isSVG) {
+        if (image && typeof image !== 'string' && image.buffer) {
+            let tex = new TextDecoder("utf-8");
 
-    // If its a local file, check if it exists
-    if (!isUrl && !existsSync(path.join("./static/", image as string))) {
-        return new Response("", { status: 404 });
+            let svgData = optimize(tex.decode(image.buffer), {
+                multipass: true,
+            })
+
+            buffer = Buffer.from(svgData.data, "utf-8");
+
+            format = "svg+xml";
+        }
     }
+    else {
+        // Specific avif adjustments that we need to make
+        const toFormat: keyof FormatEnum | AvailableFormatInfo =
+            format === "avif" ? "heif" : (format as any);
+        const compression = format === "avif" ? "av1" : undefined;
 
-    const pipeline = sharp(
-        isUrl ? (image as any).buffer : path.join("./static/", image as string),
-        {
-            sequentialRead: true,
-        },
-    );
+        // If its a local file, check if it exists
+        if (!isUrl && !existsSync(path.join("./static/", image as string))) {
+            return new Response("", { status: 404 });
+        }
 
-    let width = url.searchParams.has("width")
-        ? parseInt(url.searchParams.get("width")!)
-        : null;
+        const pipeline = sharp(
+            isUrl ? (image as any).buffer : path.join("./static/", image as string),
+            {
+                sequentialRead: true,
+            },
+        );
 
-    let height = url.searchParams.has("height")
-        ? parseInt(url.searchParams.get("height")!)
-        : null;
+        let width = url.searchParams.has("width")
+            ? parseInt(url.searchParams.get("width")!)
+            : null;
 
-    let position = url.searchParams.has("position")
-        ? url.searchParams.get("position")!
-        : "centre";
+        let height = url.searchParams.has("height")
+            ? parseInt(url.searchParams.get("height")!)
+            : null;
 
-    width = width && (await pipeline.metadata()).width! >= width ? width : null;
-    height =
-        height && (await pipeline.metadata()).height! >= height ? height : null;
+        let position = url.searchParams.has("position")
+            ? url.searchParams.get("position")!
+            : "centre";
 
-    if (width || height) {
-        pipeline.resize(width, height, { position });
+        width = width && (await pipeline.metadata()).width! >= width ? width : null;
+        height =
+            height && (await pipeline.metadata()).height! >= height ? height : null;
+
+        if (width || height) {
+            pipeline.resize(width, height, { position });
+        }
+
+        pipeline.toFormat(toFormat, {
+            quality: quality,
+            compression: compression,
+            lossless: quality == 100 ? true : false,
+        });
+
+        buffer = await new Promise((resolve) => {
+            pipeline.toBuffer((_, buffer) => resolve(buffer));
+        });
     }
-
-    pipeline.toFormat(toFormat, {
-        quality: quality,
-        compression: compression,
-        lossless: quality == 100 ? true : false,
-    });
-
-    const buffer: Buffer = await new Promise((resolve) => {
-        pipeline.toBuffer((_, buffer) => resolve(buffer));
-    });
 
     if (config.saveCache) {
-        config.saveCache(tag, buffer);
+        config.saveCache(tag, buffer!);
     }
 
     return new Response(buffer, {

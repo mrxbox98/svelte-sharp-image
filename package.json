@@ -49,5 +49,8 @@
     "svelte": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "type": "module",
-    "license": "MIT"
+    "license": "MIT",
+    "dependencies": {
+        "svgo": "^3.3.2"
+    }
 }
